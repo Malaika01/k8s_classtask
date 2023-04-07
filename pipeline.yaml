@@ -11,7 +11,7 @@ pipeline {
          withCredentials([usernamePassword(passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
   
         }
-        sh 'docker tag coin-change my-registry/my-app:latest'
+        sh 'docker tag coin-change malaikawaheed/coin-change:0.0.1'
         sh 'docker push my-registry/coin-change:0.0.1'
         }
       }
