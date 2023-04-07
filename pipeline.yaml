@@ -1,29 +1,44 @@
 pipeline {
   agent any
+  
   stages {
     stage('Clone repo') {
       steps {
         git 'https://github.com/hammadmajeed/k8s_classtask.git'
       }
     }
-    stage('Build Docker Image') {
+
+    stage('Build Docker image') {
       steps {
-         withCredentials([usernamePassword(passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
-  
-        }
-        sh 'docker tag coin-change malaikawaheed/coin-change:0.0.1'
-        sh 'docker push my-registry/coin-change:0.0.1'
-        }
+        sh 'docker build -t my-app .'
       }
     }
+
+    stage('Push Docker image') {
+      steps {
+        withCredentials([usernamePassword(passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+          sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+        }
+        sh 'docker tag my-app malaikawaheed/coin-change:0.0.1'
+        sh 'docker push malaikawaheed/coin-change:0.0.1'
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       steps {
-        sh 'kubectl apply -f k8s_deployment.yaml'
-        sh 'kubectl expose deployment coin-changing --type=LoadBalancer --port=80 --target-port=5000'
+        withKubeConfig([credentialsId: 'my-kubeconfig-creds', serverUrl: 'https://my-kubernetes-server-url']) {
+          sh 'kubectl apply -f k8s/deployment.yaml'
+          sh 'kubectl apply -f k8s/service.yaml'
+        }
+        script {
+          def nodePort = sh(script: 'kubectl get svc my-app-service -o jsonpath="{.spec.ports[0].nodePort}"', returnStdout: true).trim()
+          def ipAddress = sh(script: 'kubectl get nodes -o jsonpath="{.items[0].status.addresses[0].address}"', returnStdout: true).trim()
+          env.LIVE_IP_PORT = "${ipAddress}:${nodePort}"
+        }
       }
-      post {
+       post {
         success {
-          echo "Application deployed successfully to k8s!"
+          echo "Application deployed successfully!"
         }
         failure {
           echo "Failed to deploy application!"
